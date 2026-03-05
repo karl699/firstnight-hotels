@@ -1,0 +1,16 @@
+{
+  "name": "firstnight-hotels",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FirstNightHotels root app for Scalingo deployment, delegating to backend/app.",
+  "scripts": {
+    "start": "node backend/app/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
