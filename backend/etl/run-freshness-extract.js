@@ -152,13 +152,15 @@ async function main() {
             row.city,
             row.country_code
           );
-          if (webResult.confidence === "high" && (webResult.opening_year || webResult.last_major_renovation_year)) {
+          const hasYears = webResult.opening_year || webResult.last_major_renovation_year;
+          const hasSources = Array.isArray(webResult.sources) && webResult.sources.length > 0;
+          if (hasYears && (webResult.confidence === "high" || (webResult.confidence === "medium" && hasSources))) {
             extracted = {
               ...extracted,
               opening_year: webResult.opening_year ?? extracted.opening_year,
               last_major_renovation_year:
                 webResult.last_major_renovation_year ?? extracted.last_major_renovation_year,
-              confidence: "high",
+              confidence: webResult.confidence,
               _webSources: webResult.sources,
             };
           }

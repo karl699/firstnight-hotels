@@ -10,7 +10,8 @@
     "migrate:create": "node-pg-migrate create -m migrations",
     "etl:import": "node backend/etl/run-import.js",
     "freshness:extract": "node backend/etl/run-freshness-extract.js",
-    "freshness:score": "node backend/etl/run-freshness-score.js"
+    "freshness:score": "node backend/etl/run-freshness-score.js",
+    "freshness:test": "node backend/etl/freshness/test-extraction.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
