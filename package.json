@@ -4,10 +4,14 @@
   "private": true,
   "description": "FirstNightHotels root app for Scalingo deployment, delegating to backend/app.",
   "scripts": {
-    "start": "node backend/app/index.js"
+    "start": "node backend/app/index.js",
+    "migrate:up": "node-pg-migrate up -m migrations",
+    "migrate:down": "node-pg-migrate down -m migrations",
+    "migrate:create": "node-pg-migrate create -m migrations"
   },
   "dependencies": {
     "express": "^4.21.2",
+    "node-pg-migrate": "^7.9.0",
     "pg": "^8.13.1"
   },
   "engines": {
