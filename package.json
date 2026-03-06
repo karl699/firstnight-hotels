@@ -8,9 +8,12 @@
     "migrate:up": "node-pg-migrate up -m migrations",
     "migrate:down": "node-pg-migrate down -m migrations",
     "migrate:create": "node-pg-migrate create -m migrations",
-    "etl:import": "node backend/etl/run-import.js"
+    "etl:import": "node backend/etl/run-import.js",
+    "freshness:extract": "node backend/etl/run-freshness-extract.js",
+    "freshness:score": "node backend/etl/run-freshness-score.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "express": "^4.21.2",
     "node-pg-migrate": "^7.9.0",
     "pg": "^8.13.1"

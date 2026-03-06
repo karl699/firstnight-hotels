@@ -132,6 +132,23 @@
       font-size: 0.875rem;
     }
 
+    .property-freshness {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .freshness-score {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .freshness-years {
+      color: var(--muted);
+    }
+
     .property-address {
       font-size: 0.8rem;
       color: var(--muted);
@@ -227,16 +244,30 @@
           return;
         }
 
-        resultsMeta.textContent = `${data.total} hotel${data.total !== 1 ? "s" : ""} found`;
+        resultsMeta.textContent = `${data.total} hotel${data.total !== 1 ? "s" : ""} found (sorted by freshness)`;
         resultsList.innerHTML = data.properties
           .map(
-            (p) => `
+            (p) => {
+              const freshnessLabel = p.freshness_score != null
+                ? `Freshness: ${Number(p.freshness_score).toFixed(1)}/10${p.freshness_bucket ? ` (${p.freshness_bucket} yrs)` : ""}`
+                : "Freshness: –";
+              const yearParts = [];
+              if (p.last_major_renovation_year) yearParts.push(`Renovated ${p.last_major_renovation_year}`);
+              else if (p.last_soft_renovation_year) yearParts.push(`Refreshed ${p.last_soft_renovation_year}`);
+              if (p.opening_year) yearParts.push(`Opened ${p.opening_year}`);
+              const yearLabel = yearParts.length ? yearParts.join(" · ") : "–";
+              return `
             <li>
               <div class="property-name">${escapeHtml(p.name)}</div>
               <div class="property-meta">${escapeHtml(p.type)} · ${escapeHtml(p.city)}, ${escapeHtml(p.country_code)}</div>
+              <div class="property-freshness">
+                <span class="freshness-score">${escapeHtml(freshnessLabel)}</span>
+                <span class="freshness-years">${escapeHtml(yearLabel)}</span>
+              </div>
               ${p.address_line1 ? `<div class="property-address">${escapeHtml(p.address_line1)}</div>` : ""}
             </li>
-          `
+          `;
+            }
           )
           .join("");
 

@@ -76,10 +76,11 @@ app.get("/search", async (req, res) => {
       pool.query(
         `SELECT id, type, name, brand, chain, country_code, city,
                 address_line1, latitude, longitude,
-                opening_year, last_major_renovation_year, freshness_score, freshness_bucket
+                opening_year, last_major_renovation_year, last_soft_renovation_year,
+                freshness_score, freshness_bucket
          FROM properties
          WHERE ${whereClause}
-         ORDER BY name
+         ORDER BY freshness_score DESC NULLS LAST, last_major_renovation_year DESC NULLS LAST, opening_year DESC NULLS LAST, name
          LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset]
       ),
