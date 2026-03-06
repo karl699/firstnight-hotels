@@ -7,8 +7,10 @@ const { getPool } = require("./config");
 const { getHotelbedsProviderId } = require("./persistence");
 const { collectText } = require("./freshness/collect-text");
 const { extract } = require("./freshness/extract-with-ai");
+const { extractFromWeb } = require("./freshness/extract-from-web");
 
 const FORCE_ALL = process.env.FRESHNESS_FORCE_ALL === "true";
+const WEB_LOOKUP = process.env.FRESHNESS_WEB_LOOKUP === "true";
 const LIMIT = process.env.FRESHNESS_LIMIT ? parseInt(process.env.FRESHNESS_LIMIT, 10) : null;
 const MIN_CONFIDENCE = process.env.FRESHNESS_MIN_CONFIDENCE ?? "low"; // low | medium | high
 
@@ -19,7 +21,7 @@ async function loadCandidates(pool, providerId) {
     ? ""
     : `AND (p.opening_year IS NULL AND p.last_major_renovation_year IS NULL)`;
 
-  let query = `SELECT pp.id AS pp_id, pp.property_id, pp.provider_raw, p.name AS property_name
+  let query = `SELECT pp.id AS pp_id, pp.property_id, pp.provider_raw, p.name AS property_name, p.city, p.country_code
      FROM provider_properties pp
      JOIN properties p ON p.id = pp.property_id
      WHERE pp.provider_id = $1 AND pp.provider_raw IS NOT NULL ${forceClause}
@@ -52,6 +54,32 @@ async function updatePropertyYears(pool, propertyId, extracted) {
       propertyId,
     ]
   );
+}
+
+async function storeWebSources(pool, propertyId, sources, extracted) {
+  if (!Array.isArray(sources) || sources.length === 0) return;
+  for (const s of sources) {
+    let sourceName = "unknown";
+    try {
+      if (s.url) sourceName = new URL(s.url).hostname.replace(/^www\./, "");
+    } catch (_) {}
+    await pool.query(
+      `INSERT INTO property_renovation_texts (property_id, source_type, source_name, source_url, raw_text, extracted_years)
+       VALUES ($1, 'web_lookup', $2, $3, $4, $5)`,
+      [
+        propertyId,
+        sourceName,
+        s.url ?? null,
+        s.phrase ?? "",
+        JSON.stringify({
+          opening_year: extracted?.opening_year,
+          last_major_renovation_year: extracted?.last_major_renovation_year,
+          year: s.year,
+          type: s.type,
+        }),
+      ]
+    );
+  }
 }
 
 async function upsertRenovations(pool, propertyId, renovations) {
@@ -106,8 +134,38 @@ async function main() {
     const text = collectText(row.provider_raw);
 
     try {
-      const extracted = await extract(row.property_name, text);
+      let extracted = await extract(row.property_name, text);
       stats.confidence[extracted.confidence] = (stats.confidence[extracted.confidence] ?? 0) + 1;
+
+      const needsWebLookup =
+        WEB_LOOKUP &&
+        process.env.BRAVE_API_KEY &&
+        !extracted.opening_year &&
+        !extracted.last_major_renovation_year &&
+        row.city &&
+        row.country_code;
+
+      if (needsWebLookup) {
+        try {
+          const webResult = await extractFromWeb(
+            row.property_name,
+            row.city,
+            row.country_code
+          );
+          if (webResult.confidence === "high" && (webResult.opening_year || webResult.last_major_renovation_year)) {
+            extracted = {
+              ...extracted,
+              opening_year: webResult.opening_year ?? extracted.opening_year,
+              last_major_renovation_year:
+                webResult.last_major_renovation_year ?? extracted.last_major_renovation_year,
+              confidence: "high",
+              _webSources: webResult.sources,
+            };
+          }
+        } catch (webErr) {
+          console.warn(`[${i + 1}/${candidates.length}] ${row.property_name}: web lookup failed:`, webErr.message);
+        }
+      }
 
       if (!shouldApply(extracted)) {
         stats.skipped++;
@@ -117,6 +175,9 @@ async function main() {
 
       await updatePropertyYears(pool, row.property_id, extracted);
       await upsertRenovations(pool, row.property_id, extracted.renovations ?? []);
+      if (extracted._webSources) {
+        await storeWebSources(pool, row.property_id, extracted._webSources, extracted);
+      }
 
       stats.updated++;
       const years = [
@@ -126,7 +187,8 @@ async function main() {
       ]
         .filter(Boolean)
         .join(", ");
-      console.log(`[${i + 1}/${candidates.length}] ${row.property_name}: ${years || "none"} (${extracted.confidence})`);
+      const sourceTag = extracted._webSources ? " [web]" : "";
+      console.log(`[${i + 1}/${candidates.length}] ${row.property_name}: ${years || "none"} (${extracted.confidence})${sourceTag}`);
     } catch (err) {
       stats.errors++;
       console.error(`[${i + 1}/${candidates.length}] ${row.property_name}: ERROR`, err.message);
